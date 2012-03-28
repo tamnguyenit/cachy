@@ -103,9 +103,13 @@ module Cachy
               end
 
               obj = self.class.cachy_cache.fetch("#{class_key}:#{cache_key}", options.slice(*::Cachy.cache_option_keys)) do
-                o = send(name, *args)
-                (o.is_a?(Array) ? o.map(&:cachy_preload) : o.cachy_preload) if options[:cachy_preload]
-                o
+                ob = send(name, *args)
+                options[:cachy_preload] && if ob.is_a?(Array)
+                  ob.each { |o| o.cachy_preload if o.respond_to? :cachy_preload }
+                else
+                  ob.cachy_preload if ob.respond_to? :cachy_preload
+                end
+                ob
               end
               ::Cachy.autoload(obj)
             end
@@ -168,9 +172,13 @@ module Cachy
             end
 
             obj = cachy_cache.fetch("#{class_key}:#{cache_key}", options.slice(*::Cachy.cache_option_keys)) do
-              o = send(name, *args)
-              (o.is_a?(Array) ? o.map(&:cachy_preload) : o.cachy_preload) if options[:cachy_preload]
-              o
+              ob = send(name, *args)
+              options[:cachy_preload] && if ob.is_a?(Array)
+                ob.each { |o| o.cachy_preload if o.respond_to? :cachy_preload }
+              else
+                ob.cachy_preload if ob.respond_to? :cachy_preload
+              end
+              ob
             end
 
             ::Cachy.autoload(obj)
