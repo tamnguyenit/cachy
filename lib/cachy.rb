@@ -83,7 +83,7 @@ module Cachy
       block_after_load = options[:after_load]
 
       class_eval do
-        define_method "#{name}_via_cache" do |*args|
+        define_method "#{name}_via_cache" do |*args, &block|
           if block_with_key.is_a?(Proc)
             cache_key = block_with_key.call(self, *args)
           else
@@ -103,13 +103,9 @@ module Cachy
               end
 
               obj = self.class.cachy_cache.fetch("#{class_key}:#{cache_key}", options.slice(*::Cachy.cache_option_keys)) do
-                ob = send(name, *args)
-                options[:cachy_preload] && if ob.is_a?(Array)
-                  ob.each { |o| o.cachy_preload if o.respond_to? :cachy_preload }
-                else
-                  ob.cachy_preload if ob.respond_to? :cachy_preload
-                end
-                ob
+                o = send(name, *args)
+                block && block.call(o)
+                o
               end
               ::Cachy.autoload(obj)
             end
@@ -155,7 +151,7 @@ module Cachy
 
       class_key = "#{self.name}:class:#{name}"
       (class << self; self; end).instance_eval do
-        define_method "#{name}_via_cache" do |*args|
+        define_method "#{name}_via_cache" do |*args, &block|
           if block_with_key
             cache_key = block_with_key.call(*args)
           else
@@ -172,13 +168,9 @@ module Cachy
             end
 
             obj = cachy_cache.fetch("#{class_key}:#{cache_key}", options.slice(*::Cachy.cache_option_keys)) do
-              ob = send(name, *args)
-              options[:cachy_preload] && if ob.is_a?(Array)
-                ob.each { |o| o.cachy_preload if o.respond_to? :cachy_preload }
-              else
-                ob.cachy_preload if ob.respond_to? :cachy_preload
-              end
-              ob
+              o = send(name, *args)
+              block && block.call(o)
+              o
             end
 
             ::Cachy.autoload(obj)
