@@ -67,6 +67,7 @@ module Cachy
 
       class_eval do
         define_method "#{name}_via_cache" do |*args, &block|
+          # cache key must represent the current object (i.e. id)
           if block_with_key.is_a?(Proc)
             cache_key = block_with_key.call(self, *args)
           else
@@ -77,8 +78,10 @@ module Cachy
 
           variable = "@cachy_#{name}_#{cache_key}"
           unless instance_variable_defined?(variable)
-            object = if block_if && block_if.call(self, *args) == false
-              send(name, *args)
+            object = nil
+
+            if block_if && block_if.call(self, *args) == false
+              object = send(name, *args)
             else
               if defined?(Rails) && !Rails.env.production?
                 Rails.logger.info "#{class_key}:#{cache_key}"
@@ -86,14 +89,14 @@ module Cachy
               end
 
               begin
-                obj = self.class.cachy_cache.fetch("#{class_key}:#{cache_key}", options.slice(*::Cachy.cache_option_keys)) do
-                  o = send(name, *args)
-                  block && block.call(o)
-                  o
+                object = self.class.cachy_cache.fetch("#{class_key}:#{cache_key}", options.slice(*::Cachy.cache_option_keys)) do
+                  obj = send(name, *args)
+                  block && block.call(obj)
+                  obj
                 end
 
-                # In development, classes are not cached.
-                if object.frozen? && object.is_a?(::String) && object =~ /ActiveSupport::Cache::Entry/
+                # in development, classes are not cached so sometimes Rails will fail to unmarshall the object
+                if object.frozen? && obj.is_a?(::String) && object =~ /ActiveSupport::Cache::Entry/
                   object = Marshal.load(object).value
                 end
               rescue ArgumentError => error
@@ -156,8 +159,10 @@ module Cachy
 
           cache_key = ::Cachy.digest(cache_key, options.slice(*::Cachy.digest_option_keys))
 
-          object = if block_if && block_if.call(*args) == false
-            send(name, *args)
+          object = nil
+
+          if block_if && block_if.call(*args) == false
+            object = send(name, *args)
           else
             if defined?(Rails) && !Rails.env.production?
               Rails.logger.info "#{class_key}:#{cache_key}"
@@ -165,13 +170,13 @@ module Cachy
             end
 
             begin
-              obj = cachy_cache.fetch("#{class_key}:#{cache_key}", options.slice(*::Cachy.cache_option_keys)) do
-                o = send(name, *args)
-                block && block.call(o)
-                o
+              object = cachy_cache.fetch("#{class_key}:#{cache_key}", options.slice(*::Cachy.cache_option_keys)) do
+                obj = send(name, *args)
+                block && block.call(obj)
+                obj
               end
 
-              # In development, classes are not cached.
+              # in development, classes are not cached so sometimes Rails will fail to unmarshall the object
               if object.frozen? && object.is_a?(::String) && object =~ /ActiveSupport::Cache::Entry/
                 object = Marshal.load(object).value
               end
