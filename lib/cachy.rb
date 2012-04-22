@@ -94,7 +94,7 @@ module Cachy
                 end
 
                 # in development, classes are not cached so sometimes Rails will fail to unmarshall the object
-                if object.frozen? && obj.is_a?(::String) && object =~ /ActiveSupport::Cache::Entry/
+                if object.frozen? && object.is_a?(::String) && object =~ /ActiveSupport::Cache::Entry/
                   object = Marshal.load(object).value
                 end
               rescue ArgumentError => error
