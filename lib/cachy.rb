@@ -57,8 +57,6 @@ module Cachy
     def caches_method(name, options = {}, &block)
       class_key = "#{self.name}:#{name}"
 
-      name_no_cache = "#{name}_no_cache"
-
       options.reverse_merge!(cachy_options)
 
       block_if = options[:if]
