@@ -29,25 +29,6 @@ module Cachy
     key
   end
 
-  def self.autoload(object)
-    # In console, somehow we have missing constants error.
-    # It doesn't happen in production though.
-    if object.frozen? && object.is_a?(::String) && object =~ /ActiveSupport::Cache::Entry/
-      obj = Marshal.load(object)
-      return obj.value
-    else
-      object
-    end
-  rescue ArgumentError => error
-    lazy_load ||= Hash.new { |hash, hash_key| hash[hash_key] = true; false }
-
-    if error.to_s[/undefined class|referred/] && !lazy_load[error.to_s.split.last.constantize]
-      retry
-    else
-      raise error
-    end
-  end
-
   def self.cache_option_keys
     @cache_option_keys ||= [:expires_in]
   end
@@ -104,12 +85,26 @@ module Cachy
                 Rails.logger.info options.slice(*::Cachy.cache_option_keys).inspect
               end
 
-              obj = self.class.cachy_cache.fetch("#{class_key}:#{cache_key}", options.slice(*::Cachy.cache_option_keys)) do
-                o = send(name, *args)
-                block && block.call(o)
-                o
+              begin
+                obj = self.class.cachy_cache.fetch("#{class_key}:#{cache_key}", options.slice(*::Cachy.cache_option_keys)) do
+                  o = send(name, *args)
+                  block && block.call(o)
+                  o
+                end
+
+                # In development, classes are not cached.
+                if object.frozen? && object.is_a?(::String) && object =~ /ActiveSupport::Cache::Entry/
+                  object = Marshal.load(object).value
+                end
+              rescue ArgumentError => error
+                lazy_load ||= Hash.new { |hash, hash_key| hash[hash_key] = true; false }
+
+                if error.to_s[/undefined class|referred/] && !lazy_load[error.to_s.split.last.constantize]
+                  retry
+                else
+                  raise error
+                end
               end
-              ::Cachy.autoload(obj)
             end
 
             instance_variable_set(variable, object)
@@ -169,13 +164,26 @@ module Cachy
               Rails.logger.info options.slice(*::Cachy.cache_option_keys).inspect
             end
 
-            obj = cachy_cache.fetch("#{class_key}:#{cache_key}", options.slice(*::Cachy.cache_option_keys)) do
-              o = send(name, *args)
-              block && block.call(o)
-              o
-            end
+            begin
+              obj = cachy_cache.fetch("#{class_key}:#{cache_key}", options.slice(*::Cachy.cache_option_keys)) do
+                o = send(name, *args)
+                block && block.call(o)
+                o
+              end
 
-            ::Cachy.autoload(obj)
+              # In development, classes are not cached.
+              if object.frozen? && object.is_a?(::String) && object =~ /ActiveSupport::Cache::Entry/
+                object = Marshal.load(object).value
+              end
+            rescue ArgumentError => error
+              lazy_load ||= Hash.new { |hash, hash_key| hash[hash_key] = true; false }
+
+              if error.to_s[/undefined class|referred/] && !lazy_load[error.to_s.split.last.constantize]
+                retry
+              else
+                raise error
+              end
+            end
           end
 
 
