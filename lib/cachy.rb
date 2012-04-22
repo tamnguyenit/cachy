@@ -67,8 +67,11 @@ module Cachy
 
       class_eval do
         define_method "#{name}_via_cache" do |*args, &block|
-          # cache key must represent the current object (i.e. id)
-          cache_key =  block_with_key.is_a?(Proc) ? block_with_key.call(self, *args) : self.send(block_with_key)
+          if block_with_key.is_a?(Proc)
+            cache_key = block_with_key.call(self, *args)
+          else
+            cache_key = self.send(block_with_key)
+          end
 
           cache_key = ::Cachy.digest(cache_key, options.slice(*::Cachy.digest_option_keys))
 
@@ -111,7 +114,11 @@ module Cachy
         end
 
         define_method "clear_cache_#{name}" do |*args|
-          cache_key = block_with_key.is_a?(Proc) ? block_with_key.call(self, *args) : self.send(block_with_key)
+          if block_with_key.is_a?(Proc)
+            cache_key = block_with_key.call(self, *args)
+          else
+            cache_key = self.send(block_with_key)
+          end
 
           cache_key = ::Cachy.digest(cache_key, options.slice(*::Cachy.digest_option_keys))
 
