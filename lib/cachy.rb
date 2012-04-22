@@ -77,7 +77,7 @@ module Cachy
 
           variable = "@cachy_#{name}_#{cache_key}"
           unless instance_variable_defined?(variable)
-            object = if condition && condition.call(self, *args) == false
+            object = if block_if && block_if.call(self, *args) == false
               send(name, *args)
             else
               if defined?(Rails) && !Rails.env.production?
@@ -156,7 +156,7 @@ module Cachy
 
           cache_key = ::Cachy.digest(cache_key, options.slice(*::Cachy.digest_option_keys))
 
-          object = if condition && condition.call(*args) == false
+          object = if block_if && block_if.call(*args) == false
             send(name, *args)
           else
             if defined?(Rails) && !Rails.env.production?
