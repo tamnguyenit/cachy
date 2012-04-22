@@ -57,6 +57,14 @@ module Cachy
   end
 
   module ClassMethods
+    def set_cachy_cache(cachy_cache)
+      @cachy_cache = cachy_cache
+    end
+
+    def cachy_cache
+      @cachy_cache ||= ::Cachy.cache
+    end
+
     def set_cachy_options(options)
       @cachy_options = cachy_options.merge(options)
     end
@@ -72,12 +80,18 @@ module Cachy
 
       options.reverse_merge!(cachy_options)
 
-      condition = options[:if]
-      key = options[:key] || :id
+      block_if = options[:if]
+      block_with_key = options[:with_key] || :id # id of the object is the default key.
+      block_after_load = options[:after_load]
 
       class_eval do
-        define_method "#{name}_via_cache" do |*args|
-          cache_key = block ? block.call(self, *args) : self.send(key)
+        define_method "#{name}_via_cache" do |*args, &block|
+          if block_with_key.is_a?(Proc)
+            cache_key = block_with_key.call(self, *args)
+          else
+            cache_key = self.send(block_with_key)
+          end
+
           cache_key = ::Cachy.digest(cache_key, options.slice(*::Cachy.digest_option_keys))
 
           variable = "@cachy_#{name}_#{cache_key}"
@@ -90,8 +104,10 @@ module Cachy
                 Rails.logger.info options.slice(*::Cachy.cache_option_keys).inspect
               end
 
-              obj = ::Cachy.cache.fetch("#{class_key}:#{cache_key}", options.slice(*::Cachy.cache_option_keys)) do
-                send(name, *args)
+              obj = self.class.cachy_cache.fetch("#{class_key}:#{cache_key}", options.slice(*::Cachy.cache_option_keys)) do
+                o = send(name, *args)
+                block && block.call(o)
+                o
               end
               ::Cachy.autoload(obj)
             end
@@ -103,34 +119,46 @@ module Cachy
         end
 
         define_method "clear_cache_#{name}" do |*args|
-          cache_key = key ? self.send(key) : block && block.call(self, *args)
+          if block_with_key.is_a?(Proc)
+            cache_key = block_with_key.call(self, *args)
+          else
+            cache_key = self.send(block_with_key)
+          end
+
           cache_key = ::Cachy.digest(cache_key, options.slice(*::Cachy.digest_option_keys))
 
           variable = "@cachy_#{name}_#{cache_key}"
           remove_instance_variable(variable) if instance_variable_defined?(variable)
 
-          ::Cachy.cache.delete("#{class_key}:#{cache_key}")
+          self.class.cachy_cache.delete("#{class_key}:#{cache_key}")
         end
       end
 
     end
 
-    def caches_methods(*names, &block)
+    def caches_methods(*names)
       options = names.extract_options!
       names.each do |name|
-        caches_method(name, options, &block)
+        caches_method(name, options)
       end
     end
 
     def caches_class_method(name, options = {}, &block)
       options.reverse_merge!(cachy_options)
-      condition = options[:if]
+
+      block_if = options[:if]
+      block_with_key = options[:with_key]
+      block_after_load = options[:after_load]
 
       class_key = "#{self.name}:class:#{name}"
       (class << self; self; end).instance_eval do
-        define_method "#{name}_via_cache" do |*args|
-          cache_key = *args
-          cache_key = block.call(*args) if block
+        define_method "#{name}_via_cache" do |*args, &block|
+          if block_with_key
+            cache_key = block_with_key.call(*args)
+          else
+            cache_key = *args
+          end
+
           cache_key = ::Cachy.digest(cache_key, options.slice(*::Cachy.digest_option_keys))
 
           object = if condition && condition.call(*args) == false
@@ -141,8 +169,10 @@ module Cachy
               Rails.logger.info options.slice(*::Cachy.cache_option_keys).inspect
             end
 
-            obj = ::Cachy.cache.fetch("#{class_key}:#{cache_key}", options.slice(*::Cachy.cache_option_keys)) do
-              send(name, *args)
+            obj = cachy_cache.fetch("#{class_key}:#{cache_key}", options.slice(*::Cachy.cache_option_keys)) do
+              o = send(name, *args)
+              block && block.call(o)
+              o
             end
 
             ::Cachy.autoload(obj)
@@ -153,10 +183,15 @@ module Cachy
         end
 
         define_method "clear_cache_#{name}" do |*args|
-          cache_key = block ? block.call(*args) : args
+          if block_with_key
+            cache_key = block_with_key.call(*args)
+          else
+            cache_key = *args
+          end
+
           cache_key = ::Cachy.digest(cache_key, options.slice(*::Cachy.digest_option_keys))
 
-          ::Cachy.cache.delete("#{class_key}:#{cache_key}")
+          cachy_cache.delete("#{class_key}:#{cache_key}")
         end
       end
 
@@ -165,7 +200,7 @@ module Cachy
     def caches_class_methods(*names, &block)
       options = names.extract_options!
       names.each do |name|
-        caches_class_method(name, options, &block)
+        caches_class_method(name, options)
       end
     end
   end
