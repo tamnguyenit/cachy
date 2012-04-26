@@ -62,9 +62,12 @@ module Cachy
       block_if = options[:if]
       block_with_key = options[:with_key] || :id # id of the object is the default key.
       block_after_load = options[:after_load]
+      cache = options[:cachy_cache]
 
       class_eval do
         define_method "#{name}_via_cache" do |*args, &block|
+          cache ||= self.class.cachy_cache
+
           # cache key must represent the current object (i.e. id)
           if block_with_key.is_a?(Proc)
             cache_key = block_with_key.call(self, *args)
@@ -87,7 +90,7 @@ module Cachy
               end
 
               begin
-                object = self.class.cachy_cache.fetch("#{class_key}:#{cache_key}", options.slice(*::Cachy.cache_option_keys)) do
+                object = cache.fetch("#{class_key}:#{cache_key}", options.slice(*::Cachy.cache_option_keys)) do
                   obj = send(name, *args)
                   block && block.call(obj)
                   obj
@@ -145,10 +148,13 @@ module Cachy
       block_if = options[:if]
       block_with_key = options[:with_key]
       block_after_load = options[:after_load]
+      cache = options[:cachy_cache]
 
       class_key = "#{self.name}:class:#{name}"
       (class << self; self; end).instance_eval do
         define_method "#{name}_via_cache" do |*args, &block|
+          cache ||= cachy_cache
+
           if block_with_key
             cache_key = block_with_key.call(*args)
           else
@@ -168,7 +174,7 @@ module Cachy
             end
 
             begin
-              object = cachy_cache.fetch("#{class_key}:#{cache_key}", options.slice(*::Cachy.cache_option_keys)) do
+              object = cache.fetch("#{class_key}:#{cache_key}", options.slice(*::Cachy.cache_option_keys)) do
                 obj = send(name, *args)
                 block && block.call(obj)
                 obj
