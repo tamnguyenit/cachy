@@ -54,7 +54,11 @@ module Cachy
       @cachy_options ||= { :expires_in => 1.day, :no_locale => true }
     end
 
-    def caches_method(name, options = {}, &block)
+    def caches_method(method_name, options = {}, &block)
+      name, punctuation = method_name.to_s.sub(/([?!=])$/, ''), $1
+      name_with_cache = "#{name}_with_cache#{punctuation}"
+      name_without_cache = "#{name}_without_cache#{punctuation}"
+
       class_key = "#{self.name}:#{name}"
 
       options.reverse_merge!(cachy_options)
@@ -65,7 +69,7 @@ module Cachy
       cache = options[:cachy_cache]
 
       class_eval do
-        define_method "#{name}_via_cache" do |*args, &block|
+        define_method name_with_cache do |*args, &block|
           cache ||= self.class.cachy_cache
 
           # cache key must represent the current object (i.e. id)
@@ -82,7 +86,7 @@ module Cachy
             object = nil
 
             if block_if && block_if.call(self, *args) == false
-              object = send(name, *args)
+              object = send(name_without_cache, *args)
             else
               if defined?(Rails) && !Rails.env.production?
                 Rails.logger.info "#{class_key}:#{cache_key}"
@@ -91,7 +95,7 @@ module Cachy
 
               begin
                 object = cache.fetch("#{class_key}:#{cache_key}", options.slice(*::Cachy.cache_option_keys)) do
-                  obj = send(name, *args)
+                  obj = send(name_without_cache, *args)
                   block && block.call(obj)
                   obj
                 end
@@ -117,7 +121,7 @@ module Cachy
           instance_variable_get(variable)
         end
 
-        define_method "clear_cache_#{name}" do |*args|
+        define_method "clear_cache_#{method_name}" do |*args|
           if block_with_key.is_a?(Proc)
             cache_key = block_with_key.call(self, *args)
           else
@@ -131,6 +135,8 @@ module Cachy
 
           self.class.cachy_cache.delete("#{class_key}:#{cache_key}")
         end
+
+        alias_method_chain method_name, :cache
       end
 
     end
@@ -142,7 +148,11 @@ module Cachy
       end
     end
 
-    def caches_class_method(name, options = {}, &block)
+    def caches_class_method(method_name, options = {}, &block)
+      name, punctuation = method_name.to_s.sub(/([?!=])$/, ''), $1
+      name_with_cache = "#{name}_with_cache#{punctuation}"
+      name_without_cache = "#{name}_without_cache#{punctuation}"
+
       options.reverse_merge!(cachy_options)
 
       block_if = options[:if]
@@ -152,7 +162,7 @@ module Cachy
 
       class_key = "#{self.name}:class:#{name}"
       (class << self; self; end).instance_eval do
-        define_method "#{name}_via_cache" do |*args, &block|
+        define_method name_with_cache do |*args, &block|
           cache ||= cachy_cache
 
           if block_with_key
@@ -166,7 +176,7 @@ module Cachy
           object = nil
 
           if block_if && block_if.call(*args) == false
-            object = send(name, *args)
+            object = send(name_without_cache, *args)
           else
             if defined?(Rails) && !Rails.env.production?
               Rails.logger.info "#{class_key}:#{cache_key}"
@@ -175,7 +185,7 @@ module Cachy
 
             begin
               object = cache.fetch("#{class_key}:#{cache_key}", options.slice(*::Cachy.cache_option_keys)) do
-                obj = send(name, *args)
+                obj = send(name_without_cache, *args)
                 block && block.call(obj)
                 obj
               end
@@ -199,7 +209,7 @@ module Cachy
           object
         end
 
-        define_method "clear_cache_#{name}" do |*args|
+        define_method "clear_cache_#{method_name}" do |*args|
           if block_with_key
             cache_key = block_with_key.call(*args)
           else
@@ -210,6 +220,8 @@ module Cachy
 
           cachy_cache.delete("#{class_key}:#{cache_key}")
         end
+
+        alias_method_chain method_name, :cache
       end
 
     end
