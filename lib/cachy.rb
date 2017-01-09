@@ -51,7 +51,7 @@ module Cachy
     end
 
     def cachy_options
-      @cachy_options ||= { :expires_in => 1.day, :no_locale => true }
+      @cachy_options ||= { :expires_in => 1.day, :no_locale => false }
     end
 
     def caches_method(method_name, options = {}, &block)
