@@ -17,6 +17,10 @@ module Cachy
     @cache ||= Rails.cache
   end
 
+  def self.incr_version
+    @cache_config[:version] += 1
+  end
+
   def self.digest(key, options = {})
     key = key.map { |v| "#{v}" }.join(':') if key.is_a?(::Array)
     key = key.sort_by { |k, v| "#{k}" }.join(':') if key.is_a?(::Hash)
